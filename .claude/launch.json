@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "preview",
+      "runtimeExecutable": "/usr/bin/python3",
+      "runtimeArgs": ["-I", "-c", "import os;os.chdir('/private/tmp/claude-501/-Users-chenzishu--claude-spares-spare-ThkFCQ/c08a19d0-5fa2-4317-bb0a-a4087f33c988/scratchpad');import http.server;http.server.test(HandlerClass=http.server.SimpleHTTPRequestHandler,port=8848,bind='127.0.0.1')"],
+      "port": 8848
+    }
+  ]
+}
