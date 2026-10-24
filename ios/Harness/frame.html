@@ -1,0 +1,268 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script>
+const DAY =
+{
+ "date": "2026-10-24",
+ "title": "算法 × 存储层重构日",
+ "focus": "上午头脑最清醒先刷题，下午啃 GORM + MySQL 并紧接面试题，晚饭后手写 Attention，睡前只做轻任务。",
+ "tasks": [
+  {
+   "id": "lc",
+   "title": "LeetCode 新题 ×4",
+   "short": "LC",
+   "cat": "algo",
+   "load": 3,
+   "detail": "Stack ×2 + HashMap ×2 · 2 Easy + 2 Medium，每题限时",
+   "steps": [
+    "Easy · HashMap：挑一道没做过的，限时 15 分钟",
+    "Easy · Stack：括号/栈模拟类，限时 15 分钟",
+    "Medium · HashMap：前缀和 + 哈希（候选 #560 和为 K 的子数组、#49 字母异位词分组）",
+    "Medium · Stack：单调栈（候选 #739 每日温度、#394 字符串解码）",
+    "最后 1 格：手写单调栈、前缀和哈希两个模板，记进错题本"
+   ],
+   "tokens": 4
+  },
+  {
+   "id": "cf",
+   "title": "Codeforces ×2 · 模拟/实现",
+   "short": "CF",
+   "cat": "algo",
+   "load": 3,
+   "detail": "Div.2 A/B，rating 1000–1300，tag: implementation",
+   "steps": [
+    "读题后先用 5 分钟写出步骤和边界，再开始敲",
+    "第 1 题限时 40 分钟",
+    "第 2 题限时 50 分钟，卡住就看 tutorial，然后关掉重写",
+    "记录 WA 原因（边界 / 读错题 / 溢出）"
+   ],
+   "tokens": 3
+  },
+  {
+   "id": "cv",
+   "title": "投递简历 ×2",
+   "short": "简历",
+   "cat": "career",
+   "load": 1,
+   "detail": "午饭后的低能量格，不占黄金时段",
+   "steps": [
+    "挑 2 个岗位，按 JD 微调项目描述的关键词",
+    "投递并记进投递表（公司 / 岗位 / 日期 / 渠道）"
+   ],
+   "tokens": 1
+  },
+  {
+   "id": "agent",
+   "title": "Multi-agent 重构 · GORM + MySQL",
+   "short": "GORM",
+   "cat": "build",
+   "load": 3,
+   "detail": "任务状态和运行记录落库，重新梳理 Redis 的职责",
+   "steps": [
+    "建模：Task / Run / StepLog 三张表（状态枚举、外键、索引）",
+    "GORM AutoMigrate + Repository 层（Create / UpdateStatus / ListRuns）",
+    "把内存里的任务状态换成 MySQL 读写，跑通一次完整流程",
+    "Redis：画出队列、锁、缓存各存什么，过期策略是什么",
+    "README 写一段：MySQL 存事实，Redis 存热数据和协调状态"
+   ],
+   "tokens": 5
+  },
+  {
+   "id": "mock",
+   "title": "面试真题",
+   "short": "面试",
+   "cat": "career",
+   "load": 2,
+   "detail": "紧跟项目块：趁 Redis / MySQL 刚理清，做相关八股 + 口述",
+   "steps": [
+    "Redis：持久化、过期淘汰、分布式锁",
+    "MySQL：索引、事务隔离级别、慢查询排查",
+    "Go：GMP、channel、context",
+    "挑 1 题口述作答并录音，回放找卡壳的地方"
+   ],
+   "tokens": 2
+  },
+  {
+   "id": "qea",
+   "title": "QEA homework",
+   "short": "QEA",
+   "cat": "school",
+   "load": 2,
+   "detail": "如果周日前截止，和 Codeforces 对调到上午 10:00",
+   "steps": [
+    "通读题目，标出不会的点",
+    "完成主体",
+    "检查并提交"
+   ],
+   "tokens": 3
+  },
+  {
+   "id": "llm",
+   "title": "手写大模型 · Attention",
+   "short": "LLM",
+   "cat": "learn",
+   "load": 3,
+   "detail": "从零写 Causal Self-Attention + 一个 Transformer Block",
+   "steps": [
+    "纸上推一遍 QKᵀ/√d、causal mask、softmax 的维度",
+    "PyTorch 实现 MultiHeadAttention，不看参考代码",
+    "拼成 Block（LayerNorm + MLP + 残差），用随机输入跑通 shape"
+   ],
+   "tokens": 3
+  },
+  {
+   "id": "js",
+   "title": "JavaScript 网课 ×3",
+   "short": "JS",
+   "cat": "learn",
+   "load": 1,
+   "detail": "1.5 倍速，边看边敲，3 集压进 2 格",
+   "steps": [
+    "第 1 集",
+    "第 2 集",
+    "第 3 集"
+   ],
+   "tokens": 2
+  },
+  {
+   "id": "ts",
+   "title": "看书 + TypeScript",
+   "short": "TS",
+   "cat": "learn",
+   "load": 2,
+   "detail": "读 20 分钟，再把一段 JS 练习改写成 TS（补上类型）",
+   "steps": [
+    "看书 20 分钟",
+    "挑一段刚写的 JS 改成 TS，跑通 tsc"
+   ],
+   "tokens": 1
+  }
+ ],
+ "plan": [
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_sleep",
+  "_wash",
+  "lc",
+  "lc",
+  "lc",
+  "lc",
+  "cf",
+  "cf",
+  "cf",
+  "_meal",
+  "_rest",
+  "cv",
+  "agent",
+  "agent",
+  "agent",
+  "agent",
+  "agent",
+  "mock",
+  "mock",
+  "_move",
+  "qea",
+  "qea",
+  "qea",
+  "_meal",
+  "llm",
+  "llm",
+  "llm",
+  "js",
+  "js",
+  "ts",
+  "_buffer",
+  "_review",
+  "_rest",
+  "_rest"
+ ],
+ "advice": [
+  {
+   "level": "warn",
+   "text": "冲刺日：工作 24 格 = 12 小时，强度 91。偶尔一天可以，周日把强度压到 60 左右。"
+  },
+  {
+   "level": "tip",
+   "text": "三个重任务（刷题 / 重构 / 手写 Attention）都在 21:00 前；21:00 之后只剩 JS 视频和 TS 这类轻任务。"
+  },
+  {
+   "level": "tip",
+   "text": "面试真题紧跟 Multi-agent 块：刚理清 Redis 和 MySQL，马上做相关八股，记得最牢。"
+  },
+  {
+   "level": "tip",
+   "text": "投简历放在 12:30 午饭后的低能量格，不占上午的黄金时段。"
+  },
+  {
+   "level": "tip",
+   "text": "22:00 留了 1 格机动。任务超时先吃机动格；机动格用完就把 TS 挪到明天，不动睡眠。"
+  },
+  {
+   "level": "tip",
+   "text": "如果 QEA 周日前截止，把它和 Codeforces 对调到上午 10:00。"
+  }
+ ],
+ "source": "claude-code",
+ "updatedAt": "2026-10-23T06:19:17.359Z"
+};
+const PROFILE =
+{
+ "about": [
+  "大二 CS 学生，正在找实习：持续投简历、刷面试真题",
+  "技术栈：Go（GORM）/ MySQL / Redis，正在学 JavaScript 和 TypeScript",
+  "算法：LeetCode 按专题刷（stack、hashmap），Codeforces 练模拟和 implement",
+  "项目：Multi-agent 系统，用 GORM + MySQL 存任务状态和运行记录，Redis 做协调",
+  "在从零手写大模型（Transformer）",
+  "课程：QEA"
+ ],
+ "rules": [
+  "一天 48 格，每格 30 分钟",
+  "睡眠目标 ≥ 15 格（7.5 小时）",
+  "负荷 3 的任务放在 21:00 前，最难的放上午",
+  "每天至少 1 格机动、1 格复盘",
+  "超时先吃机动格，再砍低负荷任务，不动睡眠"
+ ],
+ "goals": [
+  "求职：每天推进投递和面试准备",
+  "算法保持每日手感",
+  "Multi-agent 项目做到能写进简历"
+ ],
+ "notes": [],
+ "updatedAt": "2026-10-23T06:19:17.362Z"
+};
+const store = { 'days/2026-10-24': DAY, 'memory/profile': PROFILE };
+const subs = { coll: {}, doc: {} };
+const log = m => { const el = document.getElementById('log'); if (el) el.textContent = new Date().toLocaleTimeString() + '  ' + m + '\n' + el.textContent; };
+const merge = (a, b) => { const o = { ...a }; for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a[k] && typeof a[k] === 'object' ? merge(a[k], b[k]) : b[k]; return o; };
+const snapColl = n => { const docs = Object.entries(store).filter(([k]) => k.split('/').length === 2 && k.startsWith(n + '/')).map(([k, v]) => ({ id: k.split('/')[1], data: () => v })); return { docs, size: docs.length, empty: !docs.length, metadata: { fromCache: false, hasPendingWrites: false }, docChanges: () => [] }; };
+const snapDoc = p => ({ id: p.split('/').pop(), exists: !!store[p], data: () => store[p], metadata: { fromCache: false, hasPendingWrites: false } });
+const notify = p => { const c = p.split('/')[0]; (subs.coll[c] || []).forEach(f => f(snapColl(c))); (subs.doc[p] || []).forEach(f => f(snapDoc(p))); };
+const db = {
+  collection: n => ({ onSnapshot(next) { (subs.coll[n] ||= []).push(next); setTimeout(() => next(snapColl(n)), 30); return () => {}; } }),
+  doc: p => ({
+    onSnapshot(next) { (subs.doc[p] ||= []).push(next); setTimeout(() => next(snapDoc(p)), 30); return () => {}; },
+    async set(d) { store[p] = JSON.parse(JSON.stringify(d)); log('SET ' + p); notify(p); },
+    async update(d) { if (!store[p]) throw { code: 'invalid_argument' }; store[p] = merge(store[p], d); log('UPDATE ' + p + ' {' + Object.keys(d).join(',') + '}'); notify(p); },
+    async delete() { delete store[p]; log('DELETE ' + p); notify(p); },
+  }),
+};
+window.claude = { use: async n => n === 'db' ? db : null };
+window.__writes = () => Object.keys(store);
+</script></head>
+<body style="font:13px ui-monospace,monospace;background:#1b1b2b;color:#cfe;margin:0;padding:10px">
+<b>fake artifact frame (localhost)</b>
+<button id="openComposer" onclick="log('UI compose clicked')">openComposer</button>
+<button id="aiBtn" onclick="log('UI review clicked')">aiBtn</button>
+<pre id="log">waiting…</pre>
+</body></html>

@@ -376,7 +376,8 @@ struct MetricsCard: View {
                     Text(m.actIntensity.map { "实际 \($0) · \(alv?.name ?? "")" } ?? "实际 —").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                 }
                 IntensityGauge(plan: m.planWork > 0 ? m.planIntensity : nil, actual: m.actIntensity)
-                Text("竖线：白 = 计划，粉 = 实际 · Σ负荷×格 ÷ 清醒格 × 50").font(.caption2).foregroundStyle(.tertiary)
+                Text("\(Text("▮").foregroundStyle(.primary)) 计划  \(Text("▮").foregroundStyle(Theme.accent)) 实际 · Σ负荷×格 ÷ 清醒格 × 50")
+                    .font(.caption2).foregroundStyle(.secondary)
             }
             Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 14) {
                 GridRow {
@@ -480,7 +481,7 @@ struct TaskRow: View {
     var body: some View {
         let done = day.done[task.id] == true
         let color = day.info(task.id)?.color ?? task.cat.color
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 6) {
             Button { store.toggleDone(date, task) } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 9).strokeBorder(color, lineWidth: 1.5)
@@ -488,6 +489,8 @@ struct TaskRow: View {
                     Image(systemName: "checkmark").font(.system(size: 13, weight: .heavy)).foregroundStyle(.white).opacity(done ? 1 : 0).scaleEffect(done ? 1 : 0.4)
                 }
                 .frame(width: 28, height: 28)
+                .padding(6)
+                .contentShape(.rect)
                 .animation(.spring(duration: 0.35, bounce: 0.5), value: done)
             }
             .buttonStyle(.plain)
@@ -495,7 +498,7 @@ struct TaskRow: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(task.title).font(.subheadline.weight(.semibold))
+                    Text(task.title).font(.subheadline.weight(.semibold)).padding(.top, 6)
                         .strikethrough(done, color: color).foregroundStyle(done ? .secondary : .primary)
                     Text(task.cat.name).font(.caption2.weight(.bold)).foregroundStyle(color)
                     Text(String(repeating: "●", count: task.load) + String(repeating: "○", count: 3 - task.load)).font(.caption2).foregroundStyle(.secondary)
@@ -520,8 +523,10 @@ struct TaskRow: View {
                                     HStack(alignment: .top, spacing: 8) {
                                         Image(systemName: on ? "checkmark.circle.fill" : "circle").foregroundStyle(on ? color : .secondary)
                                         Text(s).strikethrough(on).foregroundStyle(on ? .secondary : .primary).multilineTextAlignment(.leading)
+                                        Spacer(minLength: 0)
                                     }
                                     .font(.footnote)
+                                    .contentShape(.rect)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -535,7 +540,7 @@ struct TaskRow: View {
                 }
             }
         }
-        .padding(12)
+        .padding(EdgeInsets(top: 6, leading: 6, bottom: 12, trailing: 12))
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.primary.opacity(0.05)))
     }
 }

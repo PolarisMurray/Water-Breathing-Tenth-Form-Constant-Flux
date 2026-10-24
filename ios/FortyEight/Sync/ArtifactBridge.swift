@@ -30,6 +30,7 @@ final class ArtifactBridge: NSObject, ObservableObject {
         cfg.allowsInlineMediaPlayback = true
         let ucc = WKUserContentController()
         ucc.addUserScript(WKUserScript(source: Self.relayJS, injectionTime: .atDocumentEnd, forMainFrameOnly: false))
+        ucc.addUserScript(WKUserScript(source: Self.signInJS, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         cfg.userContentController = ucc
         webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: cfg)
         super.init()
@@ -101,6 +102,8 @@ final class ArtifactBridge: NSObject, ObservableObject {
             onDays?(docs, body["pending"] as? Bool ?? false)
         case "profile":
             if body["exists"] as? Bool == true, let obj = body["data"], let data = try? JSONSerialization.data(withJSONObject: obj) { onProfile?(data) } else { onProfile?(nil) }
+        case "signin":
+            if state != .ready { state = .needsSignIn; watchdog?.cancel() }
         case "nodb":
             state = .stalled("这个页面拿不到数据库（可能没有访问权限）")
         case "error":
@@ -108,6 +111,24 @@ final class ArtifactBridge: NSObject, ObservableObject {
         default: break
         }
     }
+
+    /// Signed out, claude.ai renders a sign-in wall at the artifact URL itself (no redirect to /login),
+    /// so the main frame watches its own text for a few seconds after load.
+    static let signInJS = #"""
+    (() => {
+      let n = 0;
+      const t = setInterval(() => {
+        n++;
+        const txt = (document.body && document.body.innerText) || '';
+        const wall = /sign in to view|log in to view|登录后查看|登录以查看/i.test(txt) || location.pathname.startsWith('/login');
+        if (wall && !document.querySelector('iframe')) {
+          clearInterval(t);
+          try { window.webkit.messageHandlers.fe48.postMessage({ type: 'signin' }); } catch (e) {}
+        }
+        if (n > 40) clearInterval(t);
+      }, 500);
+    })();
+    """#
 
     /// Injected into every frame at document end. Only the artifact frame has `window.claude.use`.
     static let relayJS = #"""

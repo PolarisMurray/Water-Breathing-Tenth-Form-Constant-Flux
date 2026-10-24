@@ -18,7 +18,11 @@ Artifact 数据库没有公开 API，只有 claude.ai 的网页运行时能读�
 「写计划」和「让 Claude 复盘」会打开内置网页版，因为调用 Claude 需要网页里的授权弹窗。
 
 ## 本地测试同步桥
-不登录也能测：把 artifact 地址换成一个跨域 iframe + 假数据库的测试页。
+不登录也能测：`Harness/` 里是一个跨域 iframe + 假数据库（内存里，刷新即重置）的测试页。先在 8848 端口起一个静态服务器：
+```bash
+python3 -m http.server 8848 --bind 127.0.0.1 -d Harness
+```
+再把 App 的 artifact 地址指过去：
 ```bash
 xcrun simctl spawn booted defaults write com.chenzishu.fortyeight artifactURL http://127.0.0.1:8848/harness.html
 ```
