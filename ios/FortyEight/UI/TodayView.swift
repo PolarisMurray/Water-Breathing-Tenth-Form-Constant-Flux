@@ -7,32 +7,28 @@ struct TodayView: View {
     @Binding var date: String
     @Binding var userNav: Bool
 
-    @State private var layer: Layer = .actual
-    @State private var brush = "@plan"
-    @State private var draft: [String?]?
-    @State private var selected: Int?
     @State private var now = Date()
     @State private var showPicker = false
-    @State private var confirmClear = false
+    @State private var axis: AxisLaunch?
+
+    struct AxisLaunch: Identifiable { let id = UUID(); let focus: Int? }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 let d = store.day(date)
                 let ctx = TimeCtx.of(date, at: now)
-                let plan = layer == .plan ? (draft ?? d.plan) : d.plan
-                let actual = layer == .actual ? (draft ?? d.actual) : d.actual
-                let m = Metrics(d, plan: plan, actual: actual, elapsed: ctx.elapsed)
+                let m = Metrics(d, elapsed: ctx.elapsed)
 
                 VStack(alignment: .leading, spacing: 18) {
                     SyncBanner()
                     header(d, m)
-                    DialView(day: d, plan: plan, actual: actual, ctx: ctx, m: m) { selected = $0 }
+                    DialView(day: d, plan: d.plan, actual: d.actual, ctx: ctx, m: m) { openAxis($0) }
                         .padding(8)
                         .glassCard(padding: 12)
+                    AxisEntryCard(day: d, ctx: ctx, m: m) { openAxis(nil) }
                     QuoteCard(m: m, ctx: ctx, date: date)
                     MetricsCard(m: m, ctx: ctx, xp: Exp.series(store.days).last?.total ?? 0, dayXp: Exp.gain(d))
-                    timeline(d, plan: plan, actual: actual, ctx: ctx)
                     TasksCard(day: d, m: m, date: date)
                     StrategyCard(day: d, m: m, ctx: ctx)
                     NoteCard(date: date)
@@ -51,6 +47,14 @@ struct TodayView: View {
                     .padding()
                     .presentationDetents([.medium])
             }
+            .fullScreenCover(item: $axis) { launch in
+                TimeAxisScreen(date: $date, userNav: $userNav, focus: launch.focus) {
+                    var t = Transaction(); t.disablesAnimations = true
+                    withTransaction(t) { axis = nil }
+                }
+                .environmentObject(store)
+                .environmentObject(bridge)
+            }
             .task {
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(20))
@@ -60,7 +64,13 @@ struct TodayView: View {
         }
     }
 
-    private func go(_ d: String) { date = d; userNav = true; draft = nil; selected = nil }
+    private func go(_ d: String) { date = d; userNav = true }
+
+    /// The cover appears without the system slide; the cut-in inside it is the transition.
+    private func openAxis(_ focus: Int?) {
+        var t = Transaction(); t.disablesAnimations = true
+        withTransaction(t) { axis = AxisLaunch(focus: focus) }
+    }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarLeading) {
@@ -104,97 +114,6 @@ struct TodayView: View {
                 .font(.subheadline).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 4)
-    }
-
-    // MARK: timeline
-
-    private var brushes: [(id: String, label: String, color: Color?)] {
-        let d = store.day(date)
-        var out: [(id: String, label: String, color: Color?)] = []
-        if layer == .actual { out.append(("@plan", "✓ 按计划", nil)) }
-        for t in d.tasks { out.append((t.id, t.short, d.info(t.id)?.color)) }
-        for k in Builtin.order where layer == .actual || k != "_slack" { if let b = Builtin.all[k] { out.append((k, b.title, b.cat.color)) } }
-        out.append(("@erase", "⌫ 橡皮", nil))
-        return out
-    }
-
-    private func timeline(_ d: DayDoc, plan: [String?], actual: [String?], ctx: TimeCtx) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("48 格时间轴").sectionTitle()
-                Spacer()
-                Picker("图层", selection: $layer) { ForEach(Layer.allCases, id: \.self) { Text($0.rawValue) } }
-                    .pickerStyle(.segmented).frame(maxWidth: 190)
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 7) {
-                    ForEach(brushes, id: \.id) { b in
-                        let on = b.id == brush
-                        Button { brush = b.id } label: {
-                            HStack(spacing: 6) {
-                                if let c = b.color { RoundedRectangle(cornerRadius: 3).fill(c).frame(width: 10, height: 10) }
-                                Text(b.label).font(.footnote.weight(on ? .bold : .medium))
-                            }
-                            .padding(.horizontal, 11).padding(.vertical, 7)
-                            .background(Capsule().fill(on ? (b.color ?? Theme.accent).opacity(0.28) : Color.primary.opacity(0.06)))
-                            .overlay(Capsule().strokeBorder(on ? (b.color ?? Theme.accent) : .clear, lineWidth: 1.5))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            .onChange(of: layer) { if !brushes.contains(where: { $0.id == brush }) { brush = brushes.first?.id ?? "@erase" } }
-
-            TokenGrid(day: d, plan: plan, actual: actual, ctx: ctx, layer: layer, cols: hSize == .regular ? 12 : 6,
-                      paint: { i in paintCell(i, d) }, commit: commitPaint)
-
-            Group {
-                if let i = selected {
-                    let p = d.info(plan[i]), a = d.info(actual[i])
-                    Text("\(Slot.range(i)) · 计划 \(p?.title ?? "空") · 实际 \(a?.title ?? "未记录")")
-                } else {
-                    Text("点按涂一格；按住再拖动，连续涂。")
-                }
-            }
-            .font(.footnote).foregroundStyle(.secondary).monospacedDigit()
-
-            HStack(spacing: 8) {
-                Button("当前格按计划") {
-                    var a = d.actual; a[ctx.now] = d.plan[ctx.now]; store.setActual(date, a)
-                }
-                .disabled(ctx.mode != .today || d.plan[ctx.now] == nil)
-                Button("补齐到现在") {
-                    var a = d.actual, n = 0
-                    for i in 0..<ctx.elapsed where a[i] == nil && d.plan[i] != nil { a[i] = d.plan[i]; n += 1 }
-                    if n > 0 { store.setActual(date, a); store.toast = "按计划补齐了 \(n) 格" } else { store.toast = "没有需要补齐的格子" }
-                }
-                .disabled(ctx.elapsed == 0)
-                Button("清空实际", role: .destructive) { confirmClear = true }
-                    .confirmationDialog("清空这一天的实际记录？", isPresented: $confirmClear, titleVisibility: .visible) {
-                        Button("清空", role: .destructive) { store.setActual(date, Array(repeating: nil, count: 48)) }
-                    }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .font(.footnote)
-        }
-        .glassCard()
-    }
-
-    private func paintCell(_ i: Int, _ d: DayDoc) {
-        var arr = draft ?? (layer == .plan ? d.plan : d.actual)
-        arr[i] = brush == "@erase" ? nil : brush == "@plan" ? d.plan[i] : brush
-        draft = arr
-        selected = i
-    }
-
-    private func commitPaint() {
-        guard let arr = draft else { return }
-        draft = nil
-        let d = store.day(date)
-        if layer == .plan { if arr != d.plan { store.setPlan(date, arr) } }
-        else if arr != d.actual { store.setActual(date, arr) }
     }
 }
 
