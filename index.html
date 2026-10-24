@@ -315,6 +315,15 @@ td.n,th.n{text-align:right;font-family:var(--f-num)}
 .tip{position:fixed;z-index:60;pointer-events:none;padding:8px 11px;border-radius:10px;font-size:12.5px;line-height:1.5;white-space:pre;color:var(--fg);
   background:var(--glass);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:inset 0 1px 0 var(--edge),0 10px 30px -10px var(--shadow);border:1px solid var(--cell-line)}
 
+/* exp */
+.exp-head{display:flex;flex-direction:column;gap:8px}
+.lv{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.lv b{font:clamp(32px,5vw,44px)/1 var(--f-display);letter-spacing:.03em;background:linear-gradient(90deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lv span{font:600 18px var(--f-num);font-variant-numeric:tabular-nums}
+.lvbar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:4px}
+.lvbar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .6s}
+.exp-band{font:600 10.5px var(--f-num);fill:var(--fg-3);letter-spacing:.08em}
+
 /* memory */
 .mem-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
 .mem-list{list-style:none;padding:0;display:flex;flex-direction:column;gap:8px}
@@ -491,6 +500,12 @@ td.n,th.n{text-align:right;font-family:var(--f-num)}
       <h1>执行与强度</h1>
       <p class="focus">强度 = Σ(任务负荷 × 格数) ÷ 清醒格数 × 50。负荷 1 轻 / 2 中 / 3 重；40 以下轻松，60 以上高压，80 以上冲刺。</p>
     </div>
+    <section class="glass panel">
+      <div class="panel-head"><h2>经验曲线</h2><span class="muted">完成任务得经验（每格 20 / 30 / 40，按负荷）；第 i 天到第 i+1 天，累计经验 ×0.95</span></div>
+      <div class="exp-head" id="expHead"></div>
+      <div class="chart" id="chartExp"></div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>累计经验</span><span><i style="background:var(--accent-2)"></i>当日获得</span></div>
+    </section>
     <section class="glass panel"><div class="tiles" id="tiles"></div></section>
     <section class="glass panel">
       <div class="panel-head"><h2>每日强度</h2><div class="legend"><span><i style="background:var(--fg-3);opacity:.45"></i>计划</span><span><i style="background:var(--accent)"></i>实际</span></div></div>
@@ -758,6 +773,28 @@ function strategies(day, m, ctx) {
   return out.sort((a, b) => rank[a.lv] - rank[b.lv]).slice(0, 8);
 }
 
+/* ================= EXP: finished tasks grow it, every day deflates it ================= */
+const EXP_RATE = 0.05;                          // day i → day i+1: balance × (1 − 5%)
+const EXP_PER_TOKEN = { 1: 20, 2: 30, 3: 40 };  // by task load
+const niceMax = v => { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)), m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; };
+const fmt = v => Math.round(v).toLocaleString('en-US');
+function taskExp(day, t) { return Math.max(1, day.plan.filter(x => x === t.id).length || t.tokens) * (EXP_PER_TOKEN[t.load] || 30); }
+function dayGain(day) { return day.tasks.reduce((s, t) => s + (day.done[t.id] ? taskExp(day, t) : 0), 0); }
+function expSeries() {
+  const keys = [...S.days.keys()].filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  if (!keys.length) return { rows: [], E: 0 };
+  let end = today();
+  for (const k of keys) if (k > end && dayGain(getDay(k)) > 0) end = k;
+  const rows = []; let E = 0;
+  for (let d = keys[0], n = 0; d <= end && n < 3650; d = addDays(d, 1), n++) {
+    const gain = S.days.has(d) ? dayGain(getDay(d)) : 0, decay = E * EXP_RATE;
+    E = E - decay + gain;
+    rows.push({ date: d, gain, decay, E });
+  }
+  return { rows, E };
+}
+function levelOf(E) { const L = Math.floor(Math.sqrt(Math.max(0, E) / 100)) + 1, lo = 100 * (L - 1) ** 2, hi = 100 * L ** 2; return { L, lo, hi, p: (E - lo) / (hi - lo) }; }
+
 /* ================= db ================= */
 function setSync(s) {
   S.sync = s;
@@ -924,6 +961,7 @@ function renderMetrics(m, ctx) {
     else { pace = '准点'; paceSub = '和计划同步'; }
   } else if (ctx.mode === 'past') { pace = `${m.actWork}<small>/ ${m.planWork} 格</small>`; paceSub = '实际 / 计划工作'; }
   const mk = v => v == null ? '' : `left:${Math.max(0, Math.min(100, v))}%`;
+  const xp = expSeries(), lvl = levelOf(xp.E), dayXp = dayGain(getDay(S.date));
   $('#metrics').innerHTML = `
     <div class="metric" style="grid-column:1/-1">
       <span class="k">生活强度</span>
@@ -931,6 +969,12 @@ function renderMetrics(m, ctx) {
       <div class="gauge"><span style="flex:40"></span><span style="flex:20"></span><span style="flex:20"></span><span style="flex:20"></span>
         ${m.planWork ? `<i class="mk" style="${mk(m.planInt)}" title="计划"></i>` : ''}${m.actInt != null ? `<i class="mk act" style="${mk(m.actInt)}" title="实际"></i>` : ''}</div>
       <span class="gauge-cap"><b style="color:var(--fg)">▮</b> 计划 <b style="color:var(--accent)">▮</b> 实际 · Σ负荷×格 ÷ 清醒格 × 50</span>
+    </div>
+    <div class="metric" style="grid-column:1/-1">
+      <span class="k">经验</span>
+      <span class="v">Lv.${lvl.L}<small>${fmt(xp.E)} EXP · 这一天 +${fmt(dayXp)}</small></span>
+      <div class="lvbar"><i style="width:${(lvl.p * 100).toFixed(1)}%"></i></div>
+      <span class="gauge-cap">距 Lv.${lvl.L + 1} 还差 ${fmt(lvl.hi - xp.E)} · 每晚蒸发 5%</span>
     </div>
     <div class="metric"><span class="k">计划吻合度</span><span class="v">${pct}</span><span class="s">已记录 ${m.recorded} / 48 格</span></div>
     <div class="metric"><span class="k">${ctx.mode === 'past' ? '完成量' : '节奏'}</span><span class="v">${pace}</span><span class="s">${paceSub}</span></div>
@@ -1190,9 +1234,9 @@ function updateQuoteCtx(day, m, ctx) {
 }
 
 /* ---- burst ---- */
-function burst(task) {
+function burst(task, exp) {
   const b = $('#burst');
-  $('#burstSub').textContent = `${task.title} · EXP +${(task.tokens || 1) * 30}`;
+  $('#burstSub').textContent = `${task.title} · EXP +${exp}`;
   b.hidden = false; b.classList.remove('go'); void b.offsetWidth; b.classList.add('go');
   clearTimeout(burst.t); burst.t = setTimeout(() => { b.hidden = true; b.classList.remove('go'); }, 1450);
   nextQuote();
@@ -1220,7 +1264,7 @@ function renderStats() {
     ['任务完成', allT ? `${doneT}/${allT}` : '—', allT ? Math.round(doneT / allT * 100) + '%' : '还没有任务'],
     ['摸鱼', hrs(rows.reduce((s, r) => s + r.m.slack, 0)), '14 天合计'],
   ].map(([k, v, s]) => `<div class="tile"><span class="k">${k}</span><span class="v">${v}</span><span class="s">${s}</span></div>`).join('');
-  drawIntChart(rows); drawMatchChart(rows);
+  drawIntChart(rows); drawMatchChart(rows); drawExp();
   const sel = rows[rows.length - 1];
   $('#catTitle').textContent = `类别占比 · ${dateLabel(end)}`;
   const cats = Object.keys(CATS).filter(c => (sel.m.planCat[c] || 0) + (sel.m.actCat[c] || 0) > 0);
@@ -1284,6 +1328,39 @@ function drawMatchChart(rows) {
     });
     return segs.filter(g => g.length > 1).map(g => `<path d="M${g.join('L')}" fill="none" stroke="var(--accent-2)" stroke-width="2" stroke-linejoin="round"/>`).join('') + pts + s;
   });
+}
+
+/* Two stacked bands on one x axis: the deflating balance (curve) and each day's gain (bars). */
+function drawExp() {
+  const xs = expSeries(), rows = xs.rows.slice(-30), el = $('#chartExp'), head = $('#expHead');
+  if (!rows.length) { head.innerHTML = ''; el.innerHTML = '<p class="muted">完成第一个任务后，这里开始画经验曲线。</p>'; return; }
+  const E = xs.E, lv = levelOf(E), last = xs.rows[xs.rows.length - 1], peak = Math.max(...xs.rows.map(r => r.E));
+  head.innerHTML = `<div class="lv"><b>Lv.${lv.L}</b><span>${fmt(E)} EXP</span><span class="muted">历史最高 ${fmt(peak)}</span></div>
+    <div class="lvbar"><i style="width:${(lv.p * 100).toFixed(1)}%"></i></div>
+    <div class="muted">距 Lv.${lv.L + 1} 还差 ${fmt(lv.hi - E)} · ${dateLabel(last.date)} 获得 +${fmt(last.gain)} · 下一天开始前蒸发 −${fmt(E * EXP_RATE)}</div>`;
+  const W = Math.max(340, el.clientWidth || 600), pl = 46, pr = 12, top = 12, H1 = 150, gap = 26, H2 = 56, H = top + H1 + gap + H2 + 22;
+  const n = rows.length, iw = W - pl - pr, step = n > 1 ? iw / (n - 1) : 0, x = i => pl + (n > 1 ? i * step : iw / 2);
+  const maxE = niceMax(Math.max(...rows.map(r => r.E))), maxG = niceMax(Math.max(1, ...rows.map(r => r.gain)));
+  const y1 = v => top + H1 * (1 - v / maxE), b2 = top + H1 + gap + H2, y2 = v => b2 - H2 * v / maxG;
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="经验曲线">
+    <defs><linearGradient id="expFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--accent);stop-opacity:.38"/><stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></linearGradient></defs>`;
+  for (const t of [0, maxE / 2, maxE]) s += `<line class="gridln" x1="${pl}" x2="${W - pr}" y1="${y1(t)}" y2="${y1(t)}"/><text class="ax" x="${pl - 6}" y="${y1(t) + 3.5}" text-anchor="end">${fmt(t)}</text>`;
+  s += `<line class="gridln" x1="${pl}" x2="${W - pr}" y1="${b2}" y2="${b2}"/><text class="ax" x="${pl - 6}" y="${y2(maxG) + 3.5}" text-anchor="end">${fmt(maxG)}</text>`;
+  s += `<text class="exp-band" x="${pl}" y="${top + H1 + gap - 8}">当日获得</text>`;
+  const pts = rows.map((r, i) => `${x(i).toFixed(1)} ${y1(r.E).toFixed(1)}`);
+  s += `<path d="M${pts.join('L')}L${x(n - 1).toFixed(1)} ${y1(0)}L${x(0).toFixed(1)} ${y1(0)}Z" fill="url(#expFill)"/>`;
+  s += `<path d="M${pts.join('L')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
+  const bw = Math.max(3, Math.min(12, (n > 1 ? step : 20) * 0.6)), td = today();
+  rows.forEach((r, i) => {
+    if (r.gain > 0) s += `<path d="${barPath(x(i) - bw / 2, b2, bw, b2 - y2(r.gain), 3)}" fill="var(--accent-2)"/>`;
+    const lab = n <= 16 || i % Math.ceil(n / 12) === (n - 1) % Math.ceil(n / 12);
+    if (lab) s += `<text class="ax${r.date === td ? ' today' : ''}" x="${x(i)}" y="${H - 6}" text-anchor="middle">${parseYmd(r.date).getDate()}</text>`;
+    const tip = `${dateLabel(r.date)}\n获得 +${fmt(r.gain)}\n蒸发 −${fmt(r.decay)}\n累计 ${fmt(r.E)}`;
+    const hw = n > 1 ? step : iw;
+    s += `<rect x="${x(i) - hw / 2}" y="0" width="${hw}" height="${H - 18}" fill="transparent" data-tip="${esc(tip)}" data-go="${r.date}" style="cursor:pointer"/>`;
+  });
+  s += `<circle cx="${x(n - 1)}" cy="${y1(rows[n - 1].E)}" r="4.5" fill="var(--accent)" stroke="var(--bg)" stroke-width="2"/>`;
+  el.innerHTML = s + '</svg>';
 }
 
 /* ================= memory ================= */
@@ -1450,7 +1527,7 @@ function bindUI() {
     const t = e.target.closest('.tick'); if (!t) return;
     const day = getDay(S.date), id = t.dataset.task, now = !day.done[id];
     writeDay(S.date, { done: { ...day.done, [id]: now } });
-    if (now) burst(day.taskMap[id]);
+    if (now) burst(day.taskMap[id], taskExp(day, day.taskMap[id]));
   });
   $('#taskList').addEventListener('change', e => {
     const c = e.target.closest('input[data-step]'); if (!c) return;

@@ -31,7 +31,7 @@ struct TodayView: View {
                         .padding(8)
                         .glassCard(padding: 12)
                     QuoteCard(m: m, ctx: ctx, date: date)
-                    MetricsCard(m: m, ctx: ctx)
+                    MetricsCard(m: m, ctx: ctx, xp: Exp.series(store.days).last?.total ?? 0, dayXp: Exp.gain(d))
                     timeline(d, plan: plan, actual: actual, ctx: ctx)
                     TasksCard(day: d, m: m, date: date)
                     StrategyCard(day: d, m: m, ctx: ctx)
@@ -364,10 +364,23 @@ struct SpeedLines: View {
 struct MetricsCard: View {
     let m: Metrics
     let ctx: TimeCtx
+    let xp: Double
+    let dayXp: Int
 
     var body: some View {
         let lv = Level.of(m.planWork > 0 ? m.planIntensity : nil), alv = Level.of(m.actIntensity)
+        let xl = Exp.level(xp)
         VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("经验").font(.caption).foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Lv.\(xl.n)").font(.system(size: 30, weight: .black, design: .rounded))
+                        .foregroundStyle(LinearGradient(colors: [Theme.accent, Theme.accent2], startPoint: .leading, endPoint: .trailing))
+                    Text("\(Int(xp.rounded())) EXP · 这一天 +\(dayXp)").font(.footnote.weight(.semibold)).monospacedDigit().foregroundStyle(.secondary)
+                }
+                LevelBar(progress: xl.progress)
+                Text("距 Lv.\(xl.n + 1) 还差 \(Int((xl.hi - xp).rounded())) · 每晚蒸发 5%").font(.caption2).foregroundStyle(.secondary)
+            }
             VStack(alignment: .leading, spacing: 6) {
                 Text("生活强度").font(.caption).foregroundStyle(.secondary)
                 HStack(alignment: .firstTextBaseline, spacing: 8) {

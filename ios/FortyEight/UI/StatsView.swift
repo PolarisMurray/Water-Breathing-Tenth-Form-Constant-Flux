@@ -23,6 +23,7 @@ struct StatsView: View {
                         Text("强度 = Σ(负荷 × 格数) ÷ 清醒格数 × 50。40 以下轻松，60 以上高压，80 以上冲刺。").font(.subheadline).foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 4)
+                    ExpCard(points: Exp.series(store.days))
                     tiles(rows)
                     intensityChart(rows)
                     matchChart(rows)
@@ -182,5 +183,108 @@ struct StatsView: View {
             }
         }
         .glassCard()
+    }
+}
+
+/// Deflating EXP balance (curve) over the last 30 days, with each day's gain as bars underneath.
+struct ExpCard: View {
+    let points: [Exp.Point]
+    @State private var picked: Date?
+
+    private func r(_ v: Double) -> Int { Int(v.rounded()) }
+    private static func axisLabel(_ v: AxisValue) -> some View {
+        Text((v.as(Double.self) ?? 0).formatted(.number.precision(.fractionLength(0))))
+            .frame(width: 42, alignment: .leading)
+    }
+
+    var body: some View {
+        let shown = Array(points.suffix(30))
+        let xDomain = shown.isEmpty ? Date()...Date() : Dates.date(shown.first!.date)...Dates.date(Dates.add(shown.last!.date, 1))
+        let sel = picked.flatMap { p in shown.first { Dates.cal.isDate(Dates.date($0.date), inSameDayAs: p) } }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("经验曲线").sectionTitle()
+                Spacer()
+                Text("完成任务得经验 · 每晚 ×0.95").font(.caption).foregroundStyle(.secondary)
+            }
+            if let last = points.last {
+                let lv = Exp.level(last.total)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("Lv.\(lv.n)")
+                        .font(.system(size: 40, weight: .black, design: .rounded))
+                        .foregroundStyle(LinearGradient(colors: [Theme.accent, Theme.accent2], startPoint: .leading, endPoint: .trailing))
+                    Text("\(r(last.total)) EXP").font(.title3.weight(.semibold)).monospacedDigit()
+                    Spacer()
+                    Text("最高 \(r(points.map(\.total).max() ?? 0))").font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                }
+                LevelBar(progress: lv.progress)
+                Text("距 Lv.\(lv.n + 1) 还差 \(r(lv.hi - last.total)) · \(Dates.label(last.date)) +\(last.gain) · 下一天开始前蒸发 −\(r(last.total * Exp.rate))")
+                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                Chart {
+                    ForEach(shown) { p in
+                        AreaMark(x: .value("日期", Dates.date(p.date), unit: .day), y: .value("累计经验", p.total))
+                            .foregroundStyle(LinearGradient(colors: [Theme.accent.opacity(0.4), Theme.accent.opacity(0)], startPoint: .top, endPoint: .bottom))
+                            .interpolationMethod(.monotone)
+                        LineMark(x: .value("日期", Dates.date(p.date), unit: .day), y: .value("累计经验", p.total))
+                            .foregroundStyle(Theme.accent)
+                            .lineStyle(StrokeStyle(lineWidth: 2))
+                            .interpolationMethod(.monotone)
+                    }
+                    if let s = sel {
+                        RuleMark(x: .value("日期", Dates.date(s.date), unit: .day))
+                            .foregroundStyle(.secondary.opacity(0.6))
+                            .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(Dates.label(s.date)).font(.caption.weight(.semibold))
+                                    Text("获得 +\(s.gain)").foregroundStyle(Theme.accent2)
+                                    Text("蒸发 −\(r(s.decay))").foregroundStyle(.secondary)
+                                    Text("累计 \(r(s.total))")
+                                }
+                                .font(.caption2).monospacedDigit()
+                                .padding(8)
+                                .glassEffect(.regular, in: .rect(cornerRadius: 10))
+                            }
+                    } else if let p = shown.last {
+                        PointMark(x: .value("日期", Dates.date(p.date), unit: .day), y: .value("累计经验", p.total))
+                            .foregroundStyle(Theme.accent).symbolSize(70)
+                    }
+                }
+                .chartXSelection(value: $picked)
+                .chartXScale(domain: xDomain)
+                .chartXAxis { AxisMarks(values: .stride(by: .day, count: 5)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.day()) } }
+                .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { v in AxisGridLine(); AxisValueLabel { Self.axisLabel(v) } } }
+                .frame(height: 180)
+                Text("当日获得").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                Chart(shown) { p in
+                    BarMark(x: .value("日期", Dates.date(p.date), unit: .day), y: .value("获得", Double(p.gain)))
+                        .foregroundStyle(Theme.accent2)
+                        .cornerRadius(3)
+                }
+                .chartXScale(domain: xDomain)
+                .chartXAxis(.hidden)
+                .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 2)) { v in AxisGridLine(); AxisValueLabel { Self.axisLabel(v) } } }
+                .frame(height: 60)
+                Text("按住曲线拖动可以看每天的获得、蒸发和累计。").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("完成第一个任务后，这里开始画经验曲线。").foregroundStyle(.secondary)
+            }
+        }
+        .glassCard()
+    }
+}
+
+struct LevelBar: View {
+    let progress: Double
+    var body: some View {
+        GeometryReader { g in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.primary.opacity(0.1))
+                Capsule()
+                    .fill(LinearGradient(colors: [Theme.accent, Theme.accent2], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: g.size.width * min(1, max(0, progress)))
+            }
+        }
+        .frame(height: 8)
+        .animation(.spring(duration: 0.6), value: progress)
     }
 }

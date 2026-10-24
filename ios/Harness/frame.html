@@ -242,6 +242,17 @@ const PROFILE =
  "updatedAt": "2026-10-23T06:19:17.362Z"
 };
 const store = { 'days/2026-10-24': DAY, 'memory/profile': PROFILE };
+// Synthetic history for testing the EXP curve: 21 past days, a 4-day lazy gap, varying completion.
+(() => {
+  const ids = DAY.tasks.map(t => t.id);
+  for (let k = 1; k <= 21; k++) {
+    if (k >= 6 && k <= 9) continue;
+    const dt = new Date(2026, 9, 24 - k), key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+    const share = k % 5 === 0 ? 0.3 : 0.8, done = {};
+    ids.forEach((id, i) => { if (((i * 7 + k * 3) % 10) / 10 < share) done[id] = true; });
+    store['days/' + key] = { ...DAY, date: key, done, actual: DAY.plan.slice() };
+  }
+})();
 const subs = { coll: {}, doc: {} };
 const log = m => { const el = document.getElementById('log'); if (el) el.textContent = new Date().toLocaleTimeString() + '  ' + m + '\n' + el.textContent; };
 const merge = (a, b) => { const o = { ...a }; for (const k in b) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a[k] && typeof a[k] === 'object' ? merge(a[k], b[k]) : b[k]; return o; };

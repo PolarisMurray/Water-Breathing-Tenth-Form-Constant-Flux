@@ -138,7 +138,7 @@ struct BurstOverlay: View {
                         .foregroundStyle(.white)
                         .shadow(color: Theme.accent, radius: 0, x: 4, y: 4)
                         .shadow(color: Theme.accent.opacity(0.6), radius: 24)
-                    Text("\(task.title) · EXP +\(max(1, task.tokens) * 30)")
+                    Text("\(task.title) · EXP +\(max(1, task.tokens) * Exp.perToken(task.load))")
                         .font(.subheadline.weight(.semibold)).monospacedDigit()
                         .padding(.horizontal, 14).padding(.vertical, 7)
                         .glassEffect(.regular, in: .capsule)

@@ -153,6 +153,43 @@ struct Strategy: Identifiable, Hashable {
     }
 }
 
+/// Finished tasks grow EXP; from day i to day i+1 the balance deflates by `rate`.
+/// Same formula as the web app: E(i+1) = E(i) × (1 − rate) + gain(i+1).
+enum Exp {
+    static let rate = 0.05
+    static func perToken(_ load: Int) -> Int { [1: 20, 2: 30, 3: 40][load] ?? 30 }
+
+    static func task(_ d: DayDoc, _ t: PlanTask) -> Int {
+        let n = d.plan.filter { $0 == t.id }.count
+        return max(1, n > 0 ? n : t.tokens) * perToken(t.load)
+    }
+    static func gain(_ d: DayDoc) -> Int { d.tasks.reduce(0) { $0 + (d.done[$1.id] == true ? task(d, $1) : 0) } }
+
+    struct Point: Identifiable { let date: String; let gain: Int; let decay: Double; let total: Double; var id: String { date } }
+
+    static func series(_ days: [String: DayDoc]) -> [Point] {
+        let keys = days.keys.filter { $0.count == 10 }.sorted()
+        guard let first = keys.first else { return [] }
+        var end = Dates.today
+        for k in keys where k > end && gain(days[k]!) > 0 { end = k }
+        var out: [Point] = [], e = 0.0, d = first, n = 0
+        while d <= end && n < 3650 {
+            let g = days[d].map(gain) ?? 0, decay = e * rate
+            e = e - decay + Double(g)
+            out.append(Point(date: d, gain: g, decay: decay, total: e))
+            d = Dates.add(d, 1); n += 1
+        }
+        return out
+    }
+
+    struct Level { let n: Int; let lo: Double; let hi: Double; let progress: Double }
+    static func level(_ e: Double) -> Level {
+        let n = Int((max(0, e) / 100).squareRoot()) + 1
+        let lo = 100 * Double((n - 1) * (n - 1)), hi = 100 * Double(n * n)
+        return Level(n: n, lo: lo, hi: hi, progress: (e - lo) / (hi - lo))
+    }
+}
+
 struct Quote: Hashable { let text: String; let who: String; let source: String? }
 
 enum Quotes {
