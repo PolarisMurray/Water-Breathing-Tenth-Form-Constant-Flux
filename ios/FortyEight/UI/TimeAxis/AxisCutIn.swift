@@ -2,27 +2,78 @@ import SwiftUI
 
 /// Honkai-style cut-in, drawn per frame from the elapsed time.
 /// Enter: slanted bars slam across, thunder strikes, a title band opens and syncs, then the bars fly off.
+/// Launch: the same, but the screen starts already covered (it follows the dark launch screen).
 /// Exit: the bars sweep through the screen once, so the page underneath can be swapped while covered.
+/// Time runs on frames actually drawn (a stall of more than one frame is skipped, not jumped over), so a busy
+/// main thread, as at cold launch, slows the cut-in instead of eating its first half. `onCue` reports the
+/// strike, the moment the screen is fully covered, and the end, measured on that same clock.
 struct AxisCutIn: View {
-    enum Kind { case enter, exit }
+    enum Kind { case enter, launch, exit }
+    enum Cue: CaseIterable { case strike, covered, done }
 
     let kind: Kind
-    let start: Date
     let title: String      // "TIME AXIS"
     let dateLine: String   // "10.24 SAT"
     let subtitle: String   // the day's title
     let stats: String      // "PLAN 37 · LOGGED 0"
+    var kicker = "CHRONO SYNC  //  48 TOKENS"
+    var ghost = "48"
+    var onCue: (Cue) -> Void = { _ in }
 
-    static func duration(_ k: Kind) -> Double { k == .enter ? 1.15 : 0.6 }
-    /// When the screen is fully covered, so the page can be shown or removed unseen.
-    static func covered(_ k: Kind) -> Double { k == .enter ? 0.8 : 0.26 }
+    @State private var clock = Clock()
+
+    /// Elapsed animation time. It holds at zero until frames arrive steadily (cold launch stalls for a while
+    /// after the first frame; some presentations run at 30 fps, which counts as steady) or half a second
+    /// has passed, then advances by at most one 30 fps frame per drawn frame.
+    private final class Clock {
+        private var first: Date?
+        private var last: Date?
+        private var steady = 0
+        private var running = false
+        private(set) var t = 0.0
+        private var fired: Set<Cue> = []
+
+        func tick(_ now: Date, speed: Double) -> Double {
+            guard let prev = last, let first else { first = now; last = now; return t }
+            let dt = now.timeIntervalSince(prev)
+            guard dt > 0.002 else { return t }   // the same frame evaluated again
+            last = now
+            if !running {
+                steady = dt < 0.06 ? steady + 1 : 0
+                running = steady >= 3 || now.timeIntervalSince(first) > 0.5
+                return t
+            }
+            t += min(dt, 1.0 / 30) * speed
+            return t
+        }
+        /// Cues whose time has come and that have not fired yet.
+        func due(_ times: [Cue: Double]) -> [Cue] {
+            let ready = Cue.allCases.filter { !fired.contains($0) && times[$0].map { t >= $0 } == true }
+            fired.formUnion(ready)
+            return ready
+        }
+    }
+
+    #if DEBUG
+    /// `-axisSlow` launch argument plays every cut-in 7x slower, to inspect it frame by frame on a device.
+    static let speed = CommandLine.arguments.contains("-axisSlow") ? 0.15 : 1
+    #else
+    static let speed = 1.0
+    #endif
+
+    private var cueTimes: [Cue: Double] {
+        kind == .exit ? [.covered: 0.26, .done: 0.6] : [.strike: 0.16, .covered: 0.8, .done: 1.15]
+    }
 
     var body: some View {
         TimelineView(.animation) { tl in
-            let t = tl.date.timeIntervalSince(start)
+            let t = clock.tick(tl.date, speed: Self.speed)
+            let due = clock.due(cueTimes)
+            let _ = due.isEmpty ? () : DispatchQueue.main.async { due.forEach(onCue) }
             Canvas { c, size in
                 switch kind {
-                case .enter: drawEnter(&c, size, t)
+                case .enter: drawEnter(&c, size, t, preCovered: false)
+                case .launch: drawEnter(&c, size, t, preCovered: true)
                 case .exit: drawExit(&c, size, t)
                 }
             }
@@ -96,12 +147,12 @@ struct AxisCutIn: View {
 
     // MARK: enter
 
-    private func drawEnter(_ c: inout GraphicsContext, _ size: CGSize, _ t: Double) {
+    private func drawEnter(_ c: inout GraphicsContext, _ size: CGSize, _ t: Double, preCovered: Bool) {
         let W = size.width, H = size.height
         let travel = W + H / 4 * 0.42 * 2 + 20
         bars(&c, size) { k in
             let dir: Double = k % 2 == 0 ? 1 : -1
-            let inP = easeOut((t - 0.03 * Double(k)) / 0.2)
+            let inP = preCovered ? 1 : easeOut((t - 0.03 * Double(k)) / 0.2)
             let outP = easeIn((t - 0.84 - 0.035 * Double(k)) / 0.24)
             return dir * travel * (1 - inP) - dir * travel * outP
         }
@@ -155,9 +206,9 @@ struct AxisCutIn: View {
         inside.opacity = a
         let drift = (t - 0.28) * 28
         // ghost numeral
-        inside.draw(Text("48").font(.system(size: 168, weight: .black)).italic().foregroundStyle(.white.opacity(0.16)),
+        inside.draw(Text(ghost).font(.system(size: 168, weight: .black)).italic().foregroundStyle(.white.opacity(0.16)),
                     at: CGPoint(x: W - 10 - drift * 0.8, y: cy + 6), anchor: .trailing)
-        inside.draw(Text("CHRONO SYNC  //  48 TOKENS").font(.system(size: 11, weight: .heavy)).tracking(3).foregroundStyle(.white.opacity(0.85)),
+        inside.draw(Text(kicker).font(.system(size: 11, weight: .heavy)).tracking(3).foregroundStyle(.white.opacity(0.85)),
                     at: CGPoint(x: 26 + drift * 0.4, y: cy - 60), anchor: .leading)
         // title with a decaying chromatic split and a hard manga shadow
         let split = max(0, 1 - (t - 0.3) / 0.2) * 8

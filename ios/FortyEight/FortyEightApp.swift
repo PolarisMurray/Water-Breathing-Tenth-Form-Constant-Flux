@@ -22,6 +22,8 @@ struct RootView: View {
     @State private var tab: AppTab = .today
     @State private var date = Dates.today
     @State private var userNav = false
+    /// Cold-launch cut-in; starts true so the very first frame is already covered.
+    @State private var intro = !UIAccessibility.isReduceMotionEnabled
 
     var body: some View {
         TabView(selection: $tab) {
@@ -48,6 +50,13 @@ struct RootView: View {
         .sheet(isPresented: $bridge.showWeb) { WebSheet() }
         .overlay { BurstOverlay() }
         .overlay(alignment: .top) { ToastView() }
+        .overlay {
+            if intro {
+                LaunchIntro { withAnimation(.easeOut(duration: 0.2)) { intro = false } }
+                    .transition(.opacity)
+            }
+        }
+        .statusBarHidden(intro)
         .onChange(of: store.lastSync) {
             // Like the web app: at night, open tomorrow if today has no plan yet.
             let t = Dates.today, tm = Dates.add(t, 1)
@@ -114,6 +123,31 @@ struct WebSheet: View {
                         Button("完成") { bridge.showWeb = false }
                     }
                 }
+        }
+    }
+}
+
+/// Honkai-style cut-in over the whole app on a cold launch. It follows the dark launch screen already covered,
+/// thunder strikes, the title band syncs, then the bars fly off to reveal today. Tap to skip.
+struct LaunchIntro: View {
+    @EnvironmentObject private var store: PlanStore
+    var done: () -> Void
+
+    var body: some View {
+        let today = Dates.today, d = store.day(today)
+        let lv = Exp.level(Exp.series(store.days).last?.total ?? 0).n
+        ZStack {
+            AxisCutIn(kind: .launch, title: "四十八格", dateLine: TimeAxisScreen.stamp(today),
+                      subtitle: d.title.isEmpty ? "新的一天" : d.title,
+                      stats: "Lv.\(lv) · PLAN \(d.plan.compactMap { $0 }.count)",
+                      kicker: "WELCOME BACK, CAPTAIN") { cue in
+                if cue == .strike { Haptics.impact(.rigid) }
+                if cue == .done { done() }
+            }
+            Color.clear.contentShape(.rect).ignoresSafeArea()
+                .onTapGesture(perform: done)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("跳过开场动画")
         }
     }
 }

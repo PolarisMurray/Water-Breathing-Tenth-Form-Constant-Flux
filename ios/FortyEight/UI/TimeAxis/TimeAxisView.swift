@@ -23,9 +23,11 @@ struct TimeAxisScreen: View {
             }
             if let cut {
                 let d = store.day(date)
-                AxisCutIn(kind: cut.kind, start: cut.start, title: "TIME AXIS", dateLine: Self.stamp(date),
+                AxisCutIn(kind: cut.kind, title: "TIME AXIS", dateLine: Self.stamp(date),
                           subtitle: d.title.isEmpty ? "48 格时间轴" : d.title,
-                          stats: "PLAN \(d.plan.compactMap { $0 }.count) · LOGGED \(d.actual.compactMap { $0 }.count)")
+                          stats: "PLAN \(d.plan.compactMap { $0 }.count) · LOGGED \(d.actual.compactMap { $0 }.count)",
+                          onCue: { cue(cut.kind, $0) })
+                    .id(cut.start)
                 if cut.kind == .enter {
                     Color.clear.contentShape(.rect).ignoresSafeArea()
                         .onTapGesture { revealed = true; self.cut = nil }
@@ -43,12 +45,6 @@ struct TimeAxisScreen: View {
         if reduceMotion { withAnimation(.easeOut(duration: 0.25)) { revealed = true }; return }
         cut = Cut(kind: .enter, start: .now)
         Haptics.impact(.heavy)
-        try? await Task.sleep(for: .milliseconds(160))
-        Haptics.impact(.rigid)
-        try? await Task.sleep(for: .milliseconds(Int(AxisCutIn.covered(.enter) * 1000) - 180))
-        revealed = true
-        try? await Task.sleep(for: .milliseconds(Int((AxisCutIn.duration(.enter) - AxisCutIn.covered(.enter)) * 1000)))
-        if cut?.kind == .enter { cut = nil }
     }
 
     private func close() {
@@ -57,11 +53,18 @@ struct TimeAxisScreen: View {
         if reduceMotion { onClose(); return }
         cut = Cut(kind: .exit, start: .now)
         Haptics.impact(.medium)
-        Task {
-            try? await Task.sleep(for: .milliseconds(Int(AxisCutIn.covered(.exit) * 1000)))
-            revealed = false
-            try? await Task.sleep(for: .milliseconds(Int((AxisCutIn.duration(.exit) - AxisCutIn.covered(.exit)) * 1000)))
-            onClose()
+    }
+
+    /// The page is swapped while the bars cover the screen; a skipped cut-in has already been cleared.
+    private func cue(_ kind: AxisCutIn.Kind, _ c: AxisCutIn.Cue) {
+        guard cut?.kind == kind else { return }
+        switch (kind, c) {
+        case (.enter, .strike): Haptics.impact(.rigid)
+        case (.enter, .covered): revealed = true
+        case (.enter, .done): cut = nil
+        case (.exit, .covered): revealed = false
+        case (.exit, .done): onClose()
+        default: break
         }
     }
 
